@@ -13,7 +13,9 @@
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs camera access to take photos and videos for the webview.",
         "NSPhotoLibraryUsageDescription": "This app needs photo library access to select images for the webview.",
-        "NSMicrophoneUsageDescription": "This app needs microphone access to record videos for the webview."
+        "NSMicrophoneUsageDescription": "This app needs microphone access to record videos for the webview.",
+        "NSLocationWhenInUseUsageDescription": "This app needs location access to provide location services to the webview.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs location access to provide location services to the webview."
       }
     },
     "android": {
@@ -30,8 +32,11 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.RECORD_AUDIO",
-        "android.permission.POST_NOTIFICATIONS"
-      ]
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ],
+      "package": "com.alokdebnath.webviewdemo"
     },
     "web": {
       "output": "static",
@@ -77,6 +82,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7f2142a7-6bee-4bc6-997b-d6e6bf54bc48"
+      }
     }
   }
 }
