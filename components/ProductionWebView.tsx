@@ -259,7 +259,8 @@ export default function ProductionWebView() {
       )}
       <WebView
         ref={webViewRef}
-        source={{ uri: 'https://rewritelifestyle.ai' }}
+        // source={{ uri: 'https://rewritelifestyle.ai' }}
+        source={{ uri: 'https://verdant-dodol-8aace7.netlify.app' }}
         style={styles.webview}
         onMessage={onMessage}
         onError={handleError}
