@@ -1,16 +1,15 @@
-import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from "expo-status-bar";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
-import * as Notifications from 'expo-notifications';
-import { WebView } from 'react-native-webview';
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
+import * as Notifications from "expo-notifications";
+import { WebView } from "react-native-webview";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
     shouldShowBanner: true,
@@ -19,7 +18,7 @@ Notifications.setNotificationHandler({
 });
 
 interface WebViewMessage {
-  type: 'notification' | 'file-picker' | 'camera' | 'gallery';
+  type: "notification" | "file-picker" | "camera" | "gallery";
   data?: any;
 }
 
@@ -30,48 +29,72 @@ export default function ProductionWebView() {
 
   useEffect(() => {
     requestPermissions();
+
+    // Setup notification listener
+    const subscription = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        console.log("Notification received:", notification);
+      },
+    );
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   const requestPermissions = async () => {
     try {
-      const { status: notificationStatus } = await Notifications.requestPermissionsAsync();
-      if (notificationStatus !== 'granted') {
-        console.log('Notification permissions not granted');
+      const { status: notificationStatus } =
+        await Notifications.requestPermissionsAsync();
+      if (notificationStatus !== "granted") {
+        console.log("Notification permissions not granted");
       }
 
-      const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
-      if (cameraStatus !== 'granted') {
-        console.log('Camera permissions not granted');
+      const { status: cameraStatus } =
+        await ImagePicker.requestCameraPermissionsAsync();
+      if (cameraStatus !== "granted") {
+        console.log("Camera permissions not granted");
       }
 
-      const { status: galleryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (galleryStatus !== 'granted') {
-        console.log('Gallery permissions not granted');
+      const { status: galleryStatus } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (galleryStatus !== "granted") {
+        console.log("Gallery permissions not granted");
       }
     } catch (error) {
-      console.error('Error requesting permissions:', error);
+      console.error("Error requesting permissions:", error);
     }
   };
 
   const showNotification = async (title: string, body: string) => {
     try {
-      await Notifications.scheduleNotificationAsync({
+      console.log("Scheduling notification:", { title, body });
+      const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title,
           body,
-          sound: 'default',
+          sound: "default",
+          data: { data: "goes here" },
         },
-        trigger: null,
+        trigger: null, // Send immediately
       });
+      console.log("Notification scheduled with ID:", notificationId);
+
+      // Request permissions if not already granted
+      const settings = await Notifications.getPermissionsAsync();
+      if (!settings.granted) {
+        console.log("Requesting notification permissions...");
+        await Notifications.requestPermissionsAsync();
+      }
     } catch (error) {
-      console.error('Error showing notification:', error);
+      console.error("Error showing notification:", error);
     }
   };
 
   const handleFilePicker = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['*/*'],
+        type: ["*/*"],
         copyToCacheDirectory: true,
         multiple: false,
       });
@@ -79,7 +102,7 @@ export default function ProductionWebView() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
         const message = JSON.stringify({
-          type: 'file-selected',
+          type: "file-selected",
           data: {
             name: file.name,
             uri: file.uri,
@@ -90,8 +113,8 @@ export default function ProductionWebView() {
         webViewRef.current?.postMessage(message);
       }
     } catch (error) {
-      console.error('Error picking file:', error);
-      Alert.alert('Error', 'Failed to pick file');
+      console.error("Error picking file:", error);
+      Alert.alert("Error", "Failed to pick file");
     }
   };
 
@@ -107,7 +130,7 @@ export default function ProductionWebView() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const image = result.assets[0];
         const message = JSON.stringify({
-          type: 'image-captured',
+          type: "image-captured",
           data: {
             uri: image.uri,
             width: image.width,
@@ -117,12 +140,12 @@ export default function ProductionWebView() {
         webViewRef.current?.postMessage(message);
       }
     } catch (error) {
-      console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo');
+      console.error("Error taking photo:", error);
+      Alert.alert("Error", "Failed to take photo");
     }
   };
 
-  const handleGallery = async () => {
+  const handleImagePicker = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -134,7 +157,7 @@ export default function ProductionWebView() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const image = result.assets[0];
         const message = JSON.stringify({
-          type: 'image-selected',
+          type: "image-selected",
           data: {
             uri: image.uri,
             width: image.width,
@@ -144,36 +167,43 @@ export default function ProductionWebView() {
         webViewRef.current?.postMessage(message);
       }
     } catch (error) {
-      console.error('Error selecting image:', error);
-      Alert.alert('Error', 'Failed to select image');
+      console.error("Error selecting image:", error);
+      Alert.alert("Error", "Failed to select image");
     }
   };
 
-  const onMessage = useCallback((event: any) => {
+  const handleGallery = handleImagePicker; // Alias for backward compatibility
+
+  const handleMessage = useCallback((event: any) => {
     try {
+      console.log("Received message from WebView:", event.nativeEvent.data);
       const message: WebViewMessage = JSON.parse(event.nativeEvent.data);
-      
+
       switch (message.type) {
-        case 'notification':
+        case "notification":
+          console.log("Showing notification:", message.data);
           showNotification(
-            message.data?.title || 'Notification',
-            message.data?.body || 'Notification from webview'
+            message.data?.title || "Notification",
+            message.data?.body || "You have a new notification",
           );
           break;
-        case 'file-picker':
+        case "file-picker":
+          console.log("Handling file picker");
           handleFilePicker();
           break;
-        case 'camera':
+        case "camera":
+          console.log("Opening camera");
           handleCamera();
           break;
-        case 'gallery':
-          handleGallery();
+        case "gallery":
+          console.log("Opening gallery");
+          handleImagePicker();
           break;
         default:
-          console.log('Unknown message type:', message.type);
+          console.log("Unknown message type:", message.type);
       }
     } catch (error) {
-      console.error('Error parsing message:', error);
+      console.error("Error parsing message:", error);
     }
   }, []);
 
@@ -192,25 +222,19 @@ export default function ProductionWebView() {
       };
 
       window.NativeBridge = {
-        showNotification: function(title, body) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'notification',
-            data: { title, body }
-          }));
-        },
-        pickFile: function() {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'file-picker'
-          }));
+        getLocation: function() {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'location' }));
         },
         takePhoto: function() {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'camera'
-          }));
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'camera' }));
         },
         pickImage: function() {
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'gallery'
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'gallery' }));
+        },
+        showNotification: function(title, body) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ 
+            type: 'notification', 
+            data: { title, body } 
           }));
         }
       };
@@ -260,9 +284,9 @@ export default function ProductionWebView() {
       <WebView
         ref={webViewRef}
         // source={{ uri: 'https://rewritelifestyle.ai' }}
-        source={{ uri: 'https://verdant-dodol-8aace7.netlify.app' }}
+        source={require("../index.html")}
         style={styles.webview}
-        onMessage={onMessage}
+        onMessage={handleMessage}
         onError={handleError}
         onLoad={onLoad}
         onLoadStart={onLoadStart}
@@ -277,7 +301,7 @@ export default function ProductionWebView() {
         mediaPlaybackRequiresUserAction={false}
         allowsFullscreenVideo={true}
         mixedContentMode="compatibility"
-        originWhitelist={['*']}
+        originWhitelist={["*"]}
         allowsBackForwardNavigationGestures={true}
         userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
       />
@@ -288,42 +312,42 @@ export default function ProductionWebView() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   webview: {
     flex: 1,
   },
   loadingOverlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
     zIndex: 1,
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#333',
+    color: "#333",
   },
   centerContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   errorText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ff4444',
+    fontWeight: "bold",
+    color: "#ff4444",
     marginBottom: 10,
   },
   errorSubText: {
     fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
+    color: "#666",
+    textAlign: "center",
   },
 });
