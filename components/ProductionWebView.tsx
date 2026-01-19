@@ -1,6 +1,12 @@
-import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  BackHandler,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import * as DocumentPicker from "expo-document-picker";
@@ -26,6 +32,15 @@ export default function ProductionWebView() {
   const webViewRef = useRef<WebView>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [canGoBack, setCanGoBack] = useState(false);
+
+  const handleBackPress = useCallback(() => {
+    if (canGoBack && webViewRef.current) {
+      webViewRef.current.goBack();
+      return true; // Prevent default back behavior
+    }
+    return false; // Allow default back behavior (exit app)
+  }, [canGoBack]);
 
   useEffect(() => {
     requestPermissions();
@@ -37,10 +52,17 @@ export default function ProductionWebView() {
       },
     );
 
+    // Setup hardware back button handler
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      handleBackPress,
+    );
+
     return () => {
       subscription.remove();
+      backHandler.remove();
     };
-  }, []);
+  }, [handleBackPress]);
 
   const requestPermissions = async () => {
     try {
@@ -263,6 +285,10 @@ export default function ProductionWebView() {
     setError(null);
   };
 
+  const onNavigationStateChange = (navState: any) => {
+    setCanGoBack(navState.canGoBack);
+  };
+
   if (error) {
     return (
       <View style={styles.centerContainer}>
@@ -274,7 +300,6 @@ export default function ProductionWebView() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="auto" />
       {isLoading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#E6F4FE" />
@@ -283,13 +308,14 @@ export default function ProductionWebView() {
       )}
       <WebView
         ref={webViewRef}
-        // source={{ uri: 'https://rewritelifestyle.ai' }}
-        source={require("../index.html")}
+        source={{ uri: "https://rewritelifestyle.ai" }}
+        // source={require("../index.html")}
         style={styles.webview}
         onMessage={handleMessage}
         onError={handleError}
         onLoad={onLoad}
         onLoadStart={onLoadStart}
+        onNavigationStateChange={onNavigationStateChange}
         injectedJavaScript={injectedJavaScript}
         javaScriptEnabled={true}
         domStorageEnabled={true}
