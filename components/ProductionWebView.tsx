@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
+import * as Location from "expo-location";
 import { WebView } from "react-native-webview";
 
 Notifications.setNotificationHandler({
@@ -24,12 +25,13 @@ Notifications.setNotificationHandler({
 });
 
 interface WebViewMessage {
-  type: "notification" | "file-picker" | "camera" | "gallery";
+  type: "notification" | "file-picker" | "camera" | "gallery" | "location";
   data?: any;
 }
 
 export default function ProductionWebView() {
   const webViewRef = useRef<WebView>(null);
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -37,22 +39,17 @@ export default function ProductionWebView() {
   const handleBackPress = useCallback(() => {
     if (canGoBack && webViewRef.current) {
       webViewRef.current.goBack();
-      return true; // Prevent default back behavior
+      return true;
     }
-    return false; // Allow default back behavior (exit app)
+    return false;
   }, [canGoBack]);
 
   useEffect(() => {
     requestPermissions();
 
-    // Setup notification listener
     const subscription = Notifications.addNotificationReceivedListener(
-      (notification) => {
-        console.log("Notification received:", notification);
-      },
+      () => {},
     );
-
-    // Setup hardware back button handler
     const backHandler = BackHandler.addEventListener(
       "hardwareBackPress",
       handleBackPress,
@@ -65,235 +62,173 @@ export default function ProductionWebView() {
   }, [handleBackPress]);
 
   const requestPermissions = async () => {
-    try {
-      const { status: notificationStatus } =
-        await Notifications.requestPermissionsAsync();
-      if (notificationStatus !== "granted") {
-        console.log("Notification permissions not granted");
-      }
-
-      const { status: cameraStatus } =
-        await ImagePicker.requestCameraPermissionsAsync();
-      if (cameraStatus !== "granted") {
-        console.log("Camera permissions not granted");
-      }
-
-      const { status: galleryStatus } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (galleryStatus !== "granted") {
-        console.log("Gallery permissions not granted");
-      }
-    } catch (error) {
-      console.error("Error requesting permissions:", error);
-    }
+    await Notifications.requestPermissionsAsync();
+    await ImagePicker.requestCameraPermissionsAsync();
+    await ImagePicker.requestMediaLibraryPermissionsAsync();
   };
 
-  const showNotification = async (title: string, body: string) => {
-    try {
-      console.log("Scheduling notification:", { title, body });
-      const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title,
-          body,
-          sound: "default",
-          data: { data: "goes here" },
-        },
-        trigger: null, // Send immediately
-      });
-      console.log("Notification scheduled with ID:", notificationId);
+  /* -------------------- Native Actions -------------------- */
 
-      // Request permissions if not already granted
-      const settings = await Notifications.getPermissionsAsync();
-      if (!settings.granted) {
-        console.log("Requesting notification permissions...");
-        await Notifications.requestPermissionsAsync();
+  const handleLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+
+      if (status !== "granted") {
+        webViewRef.current?.postMessage(
+          JSON.stringify({
+            type: "location-error",
+            data: { message: "Permission denied" },
+          }),
+        );
+        return;
       }
-    } catch (error) {
-      console.error("Error showing notification:", error);
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      webViewRef.current?.postMessage(
+        JSON.stringify({
+          type: "location",
+          data: {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            accuracy: location.coords.accuracy,
+            timestamp: location.timestamp,
+          },
+        }),
+      );
+    } catch {
+      webViewRef.current?.postMessage(
+        JSON.stringify({
+          type: "location-error",
+          data: { message: "Failed to fetch location" },
+        }),
+      );
     }
   };
 
   const handleFilePicker = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["*/*"],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["*/*"],
+      copyToCacheDirectory: true,
+    });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const file = result.assets[0];
-        const message = JSON.stringify({
+    if (!result.canceled && result.assets?.length) {
+      webViewRef.current?.postMessage(
+        JSON.stringify({
           type: "file-selected",
-          data: {
-            name: file.name,
-            uri: file.uri,
-            size: file.size,
-            mimeType: file.mimeType,
-          },
-        });
-        webViewRef.current?.postMessage(message);
-      }
-    } catch (error) {
-      console.error("Error picking file:", error);
-      Alert.alert("Error", "Failed to pick file");
+          data: result.assets[0],
+        }),
+      );
     }
   };
 
   const handleCamera = async () => {
-    try {
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+    });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const image = result.assets[0];
-        const message = JSON.stringify({
+    if (!result.canceled && result.assets?.length) {
+      webViewRef.current?.postMessage(
+        JSON.stringify({
           type: "image-captured",
-          data: {
-            uri: image.uri,
-            width: image.width,
-            height: image.height,
-          },
-        });
-        webViewRef.current?.postMessage(message);
-      }
-    } catch (error) {
-      console.error("Error taking photo:", error);
-      Alert.alert("Error", "Failed to take photo");
+          data: result.assets[0],
+        }),
+      );
     }
   };
 
-  const handleImagePicker = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
+  const handleGallery = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+    });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const image = result.assets[0];
-        const message = JSON.stringify({
+    if (!result.canceled && result.assets?.length) {
+      webViewRef.current?.postMessage(
+        JSON.stringify({
           type: "image-selected",
-          data: {
-            uri: image.uri,
-            width: image.width,
-            height: image.height,
-          },
-        });
-        webViewRef.current?.postMessage(message);
-      }
-    } catch (error) {
-      console.error("Error selecting image:", error);
-      Alert.alert("Error", "Failed to select image");
+          data: result.assets[0],
+        }),
+      );
     }
   };
 
-  const handleGallery = handleImagePicker; // Alias for backward compatibility
+  const showNotification = async (title: string, body: string) => {
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, sound: "default" },
+      trigger: null,
+    });
+  };
+
+  /* -------------------- Web → Native Router -------------------- */
 
   const handleMessage = useCallback((event: any) => {
     try {
-      console.log("Received message from WebView:", event.nativeEvent.data);
       const message: WebViewMessage = JSON.parse(event.nativeEvent.data);
 
       switch (message.type) {
-        case "notification":
-          console.log("Showing notification:", message.data);
-          showNotification(
-            message.data?.title || "Notification",
-            message.data?.body || "You have a new notification",
-          );
-          break;
-        case "file-picker":
-          console.log("Handling file picker");
-          handleFilePicker();
+        case "location":
+          handleLocation();
           break;
         case "camera":
-          console.log("Opening camera");
           handleCamera();
           break;
         case "gallery":
-          console.log("Opening gallery");
-          handleImagePicker();
+          handleGallery();
           break;
-        default:
-          console.log("Unknown message type:", message.type);
+        case "file-picker":
+          handleFilePicker();
+          break;
+        case "notification":
+          showNotification(
+            message.data?.title ?? "Notification",
+            message.data?.body ?? "",
+          );
+          break;
       }
-    } catch (error) {
-      console.error("Error parsing message:", error);
+    } catch {
+      console.warn("Invalid WebView message");
     }
   }, []);
 
+  /* -------------------- Injected JS -------------------- */
+
   const injectedJavaScript = `
-    (function() {
-      let originalConsole = window.console;
-      window.console = {
-        ...originalConsole,
-        log: function(...args) {
-          originalConsole.log.apply(originalConsole, args);
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'console-log',
-            data: args
-          }));
-        }
-      };
-
+    (function () {
       window.NativeBridge = {
-        getLocation: function() {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'location' }));
-        },
-        takePhoto: function() {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'camera' }));
-        },
-        pickImage: function() {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'gallery' }));
-        },
-        showNotification: function(title, body) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ 
-            type: 'notification', 
-            data: { title, body } 
-          }));
-        }
+        getLocation: () =>
+          window.ReactNativeWebView.postMessage(
+            JSON.stringify({ type: "location" })
+          ),
+        takePhoto: () =>
+          window.ReactNativeWebView.postMessage(
+            JSON.stringify({ type: "camera" })
+          ),
+        pickImage: () =>
+          window.ReactNativeWebView.postMessage(
+            JSON.stringify({ type: "gallery" })
+          ),
+        pickFile: () =>
+          window.ReactNativeWebView.postMessage(
+            JSON.stringify({ type: "file-picker" })
+          ),
+        showNotification: (title, body) =>
+          window.ReactNativeWebView.postMessage(
+            JSON.stringify({ type: "notification", data: { title, body } })
+          ),
       };
-
-      window.addEventListener('message', function(event) {
-        console.log('Received message from native:', event.data);
-      });
 
       true;
     })();
   `;
 
-  const handleError = (syntheticEvent: any) => {
-    const { nativeEvent } = syntheticEvent;
-    setError(`WebView Error: ${nativeEvent.description}`);
-    setIsLoading(false);
-  };
-
-  const onLoad = () => {
-    setIsLoading(false);
-    setError(null);
-  };
-
-  const onLoadStart = () => {
-    setIsLoading(true);
-    setError(null);
-  };
-
-  const onNavigationStateChange = (navState: any) => {
-    setCanGoBack(navState.canGoBack);
-  };
-
   if (error) {
     return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>Error loading website</Text>
-        <Text style={styles.errorSubText}>{error}</Text>
+      <View style={styles.center}>
+        <Text>{error}</Text>
       </View>
     );
   }
@@ -301,35 +236,23 @@ export default function ProductionWebView() {
   return (
     <SafeAreaView style={styles.container}>
       {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#E6F4FE" />
-          <Text style={styles.loadingText}>Loading...</Text>
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" />
         </View>
       )}
+
       <WebView
         ref={webViewRef}
         source={{ uri: "https://rewritelifestyle.ai" }}
+        // source={{ uri: "https://5789fa0c-a3cb-4f74-9425-9c9fa0d3b3ac-00-1z09g5cd7izl0.spock.replit.dev:5000" }}
         // source={require("../index.html")}
-        style={styles.webview}
         onMessage={handleMessage}
-        onError={handleError}
-        onLoad={onLoad}
-        onLoadStart={onLoadStart}
-        onNavigationStateChange={onNavigationStateChange}
         injectedJavaScript={injectedJavaScript}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        startInLoadingState={true}
-        scalesPageToFit={true}
-        showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
-        allowsInlineMediaPlayback={true}
-        mediaPlaybackRequiresUserAction={false}
-        allowsFullscreenVideo={true}
-        mixedContentMode="compatibility"
-        originWhitelist={["*"]}
-        allowsBackForwardNavigationGestures={true}
-        userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        onLoad={() => setIsLoading(false)}
+        onNavigationStateChange={(nav) => setCanGoBack(nav.canGoBack)}
+        javaScriptEnabled
+        domStorageEnabled
+        geolocationEnabled
       />
     </SafeAreaView>
   );
@@ -340,40 +263,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
   },
-  webview: {
-    flex: 1,
-  },
-  loadingOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
+  loading: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#fff",
     zIndex: 1,
   },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: "#333",
-  },
-  centerContainer: {
+  center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#ff4444",
-    marginBottom: 10,
-  },
-  errorSubText: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
   },
 });
