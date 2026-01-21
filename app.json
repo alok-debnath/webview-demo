@@ -14,8 +14,8 @@
         "NSCameraUsageDescription": "This app needs camera access to take photos and videos for the webview.",
         "NSPhotoLibraryUsageDescription": "This app needs photo library access to select images for the webview.",
         "NSMicrophoneUsageDescription": "This app needs microphone access to record videos for the webview.",
-        "NSLocationWhenInUseUsageDescription": "This app needs location access to provide location services to the webview.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs location access to provide location services to the webview."
+        "NSLocationWhenInUseUsageDescription": "This app needs location access to provide location services",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs location access to provide location services"
       }
     },
     "android": {
@@ -62,7 +62,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app needs access to photos to let you share images with the webview."
+          "photosPermission": "The app needs access to photos to let you share images."
         }
       ],
       [
